@@ -84,7 +84,7 @@ public:
 // ========================================== DPLLAlgo ========================
 
 typedef enum HeuristicAlgo {
-    MOMS, MAX_PRODUCT_POLARITY
+    MOMS, MAX_PRODUCT_POLARITY, LOOKAHEAD_UNIT_PROP, BACKBONE_VAR
 } HeuristicAlgo;
 
 class DPLLAlgo {
@@ -101,15 +101,18 @@ private:
     unordered_set<int> conflictDetectorForUnitClause;
     list<int> satResult;
 
-    int momsHeauristic(bool isDebug) const;
+    int momsHeuristic(bool isDebug) const;
     int maxProductPolarityHeuristic(bool isDebug) const;
-    int chooseSplitVarAccordingtoHeuristic(bool isDebug) const {
+    int lookAheadUnitPropagationHeuristic(bool isDebug);
+    int chooseSplitVarAccordingtoHeuristic(bool isDebug) {
 
         switch (algo) {
         case MOMS:
-            return (momsHeauristic(isDebug));
+            return (momsHeuristic(isDebug));
         case MAX_PRODUCT_POLARITY:
             return (maxProductPolarityHeuristic(isDebug));
+        case LOOKAHEAD_UNIT_PROP:
+            return (lookAheadUnitPropagationHeuristic(isDebug));
         }
         assert(false);
         return (0);
@@ -142,7 +145,7 @@ private:
             if (my_umap.erase(*iteratorForAffectedVars) <= 0) {
                 stringstream fmt;
                 fmt << __FILE__ << ':' << __LINE__ << " variable= " << (*iteratorForAffectedVars)
-                        << " cannot be erased from umap";
+                                                                << " cannot be erased from umap";
                 throw std::logic_error(fmt.str());
             }
         }
@@ -170,7 +173,8 @@ private:
     static void printDebugInfo(int recursionDepth, unordered_map<int, Clause>& clauseDB,
             unordered_set<int>& unitClause);
     static void printVarToClauseMapping(unordered_map<int, unordered_set<int>>& my_umap);
-
+    static void setVariableToTrue(int var, bool isDebug,
+            unordered_map<int, Clause>& my_clauseDB, unordered_map<int, unordered_set<int>>& my_umap, unordered_set<int>& my_unitClause);
     bool split(int var, bool isDebug, int recursionDepth, bool singlePolarityRemoval);
     bool removeSingularPolarityVars(bool isDebug);
     bool unitPropagate(bool isDebug);
@@ -183,7 +187,7 @@ public:
 
     DPLLAlgo(HeuristicAlgo my_algo, unordered_map<int, Clause>& my_clauseDB,
             unordered_map<int, unordered_set<int>>& my_umap, unordered_set<int>& my_unitClause) :
-            algo(my_algo), clauseDB(my_clauseDB), umap(my_umap), unitClause(my_unitClause) {
+                algo(my_algo), clauseDB(my_clauseDB), umap(my_umap), unitClause(my_unitClause) {
     }
 
 };
@@ -225,7 +229,7 @@ void DPLLAlgo::printVarToClauseMapping(unordered_map<int, unordered_set<int>>& m
         if (0 == (itr->second).size()) {
             stringstream fmt;
             fmt << __FILE__ << ':' << __LINE__ << " variable= " << (itr->first)
-                    << " has zero length clause list!!! in umap";
+                                                            << " has zero length clause list!!! in umap";
             throw std::logic_error(fmt.str());
         }
 
@@ -238,22 +242,12 @@ void DPLLAlgo::printVarToClauseMapping(unordered_map<int, unordered_set<int>>& m
     cout << endl << std::flush;
 }
 
-bool DPLLAlgo::split(int var, bool isDebug, int recursionDepth, bool singlePolarityRemoval) {
+void DPLLAlgo::setVariableToTrue(int var, bool isDebug,
+        unordered_map<int, Clause>& my_clauseDB, unordered_map<int, unordered_set<int>>& my_umap, unordered_set<int>& my_unitClause){
+    assert(my_umap.find(var) != my_umap.end());
 
-    if (isDebug) {
-        cout << "[Depth=" << (recursionDepth - 1) << "]Splited on = " << var << endl << std::flush;
-    }
-
-    //first clone umap, clauseDB and unitClause
-    unordered_map<int, unordered_set<int>> my_umap = umap;
-    unordered_map<int, Clause> my_clauseDB = clauseDB;
-    assert(0 == unitClause.size());
-    unordered_set<int> my_unitClause;
-
-    assert(my_umap.find(var) != my_umap.end()); //as removeSingularPolarityVars() has removed single polarity vars
-
-            //Caution: do not use reference for listOfAffectedClauses. If we do so, we may land up in deleting from the same list
-            //within deleteClause() which is being accessed (by reference) for iteration of affected clause
+    //Caution: do not use reference for listOfAffectedClauses. If we do so, we may land up in deleting from the same list
+    //within deleteClause() which is being accessed (by reference) for iteration of affected clause
     unordered_set<int> listOfAffectedClauses = my_umap[var];
     unordered_set<int>::iterator iteratorForAffectedClauseIds;
     for (iteratorForAffectedClauseIds = listOfAffectedClauses.begin();
@@ -277,6 +271,22 @@ bool DPLLAlgo::split(int var, bool isDebug, int recursionDepth, bool singlePolar
         }
     }
 
+}
+
+bool DPLLAlgo::split(int var, bool isDebug, int recursionDepth, bool singlePolarityRemoval) {
+
+    if (isDebug) {
+        cout << "[Depth=" << (recursionDepth - 1) << "]Splited on = " << var << endl << std::flush;
+    }
+
+    //first clone umap, clauseDB and unitClause
+    unordered_map<int, Clause> my_clauseDB = clauseDB;
+    unordered_map<int, unordered_set<int>> my_umap = umap;
+    //assert(0 == unitClause.size()); //will not be applicable when lookAheadUnitProp heuristic is used as setVariableToTrue() is done from there
+    unordered_set<int> my_unitClause;
+
+    setVariableToTrue(var, isDebug, my_clauseDB, my_umap, my_unitClause);
+
     DPLLAlgo algoForNextRecursion(algo, my_clauseDB, my_umap, my_unitClause);
     if (true == algoForNextRecursion.runDPLLAlgo(isDebug, recursionDepth, singlePolarityRemoval)) {
         satResult.push_back(var);
@@ -292,7 +302,7 @@ bool DPLLAlgo::split(int var, bool isDebug, int recursionDepth, bool singlePolar
 }
 
 //MOMS heuristic
-int DPLLAlgo::momsHeauristic(bool isDebug) const {
+int DPLLAlgo::momsHeuristic(bool isDebug) const {
 
     //STAGE1: First create map for size of clause to clause-id mapping
     map<int, list<int>> sizeToClauseIdMapping; //it will be default ordered in ascending (i.e. lower size clauses to higher ones)
@@ -423,6 +433,60 @@ int DPLLAlgo::maxProductPolarityHeuristic(bool isDebug) const {
     }
 
     return (candidateVar); //intention is both together as much clause is removed, simultaneously reduction happens - thus product is matrices instead of sum
+}
+
+int DPLLAlgo::lookAheadUnitPropagationHeuristic(bool isDebug){
+    unordered_map<int,unordered_set<int>>::iterator it;
+    list<int> varToBeSet;
+    int maxFixedVar = 0;
+    int varCorrespondingToMaxxFixedVar = 0;
+    for(it = umap.begin(); it != umap.end(); it ++){
+        int var = it->first;
+        if(var < 0){
+            continue;
+        }
+
+        //first clone umap, clauseDB and unitClause
+        unordered_map<int, unordered_set<int>> my_umapVar = umap;
+        unordered_map<int, Clause> my_clauseDBVar = clauseDB;
+        unordered_set<int> my_unitClauseVar;
+
+        setVariableToTrue(var, isDebug, my_clauseDBVar, my_umapVar, my_unitClauseVar);
+
+        DPLLAlgo algoForNextRecursion_var(algo, my_clauseDBVar, my_umapVar, my_unitClauseVar);
+        bool unitPropResVar =  algoForNextRecursion_var.unitPropagate(isDebug);
+
+        unordered_map<int, unordered_set<int>> my_umapVarNot = umap;
+        unordered_map<int, Clause> my_clauseDBVarNot = clauseDB;
+        unordered_set<int> my_unitClauseVarNot;
+
+        setVariableToTrue(var * -1, isDebug, my_clauseDBVarNot, my_umapVarNot, my_unitClauseVarNot);
+
+        DPLLAlgo algoForNextRecursion_varNot(algo, my_clauseDBVarNot, my_umapVarNot, my_unitClauseVarNot);
+        bool unitPropResVarNot =  algoForNextRecursion_varNot.unitPropagate(isDebug);
+
+        if((!unitPropResVar) && (!unitPropResVarNot)){
+            return (0);
+        }
+
+        if(!unitPropResVar){
+            varToBeSet.push_back(var * -1);
+        } else if (!unitPropResVarNot){
+            varToBeSet.push_back(var);
+        } else {
+            int totalFixedVar = my_umapVar.size() + my_umapVarNot.size();
+            if(totalFixedVar > maxFixedVar){
+                maxFixedVar = totalFixedVar;
+                varCorrespondingToMaxxFixedVar = var;
+            }
+        }
+    }
+
+    list<int>::iterator myIterator;
+    for(myIterator = varToBeSet.begin(); myIterator != varToBeSet.end(); myIterator ++){
+        setVariableToTrue(*myIterator, isDebug, clauseDB, umap, unitClause);
+    }
+    return (varCorrespondingToMaxxFixedVar);
 }
 
 bool DPLLAlgo::removeSingularPolarityVars(bool isDebug) {
@@ -605,6 +669,9 @@ bool DPLLAlgo::runDPLLAlgo(bool isDebug, int recursionDepth, bool singlePolarity
     }
 
     int splitVar = chooseSplitVarAccordingtoHeuristic(isDebug);
+    if(0 == splitVar){
+        return (false);
+    }
 
     if (split(splitVar, isDebug, recursionDepth + 1, singlePolarityRemoval)) {
         return (true);
@@ -652,7 +719,7 @@ public:
 
 // ======================= DimacsParser.cpp ================
 DimacsParser::DimacsParser() :
-        maxVarCount(0), maxClauseCount(0), currentParsedClauseIndex(0) {
+                                                maxVarCount(0), maxClauseCount(0), currentParsedClauseIndex(0) {
 }
 
 DimacsParser::~DimacsParser() {
@@ -895,7 +962,7 @@ int main(int argc, char *argv[]) {
     bool debug = false;
     bool isTimingToBePrinted = false;
     bool isDirectoryMode = false;
-    bool singlePolarityRemoval = false;
+    bool singlePolarityRemoval = true; //default enabled as it improves timing in maority of emperical experiment
     char* dir = NULL;
     HeuristicAlgo algo = MOMS;
 
@@ -909,13 +976,15 @@ int main(int argc, char *argv[]) {
                 isDirectoryMode = true;
                 dir = argv[i + 1];
             } else if (0 == strcmp("-p", argv[i])) {
-                singlePolarityRemoval = true;
+                singlePolarityRemoval = false;
             } else if (0 == strcmp("-h", argv[i])) {
                 char* heuristic = argv[i + 1];
                 if (0 == strcmp("MOMS", heuristic)) {
                     algo = MOMS;
                 } else if (0 == strcmp("MAX_PRODUCT_POLARITY", heuristic)) {
                     algo = MAX_PRODUCT_POLARITY;
+                } else if (0 == strcmp("LOOKAHEAD_UNIT_PROP", heuristic)) {
+                    algo = LOOKAHEAD_UNIT_PROP;
                 } else {
                     cerr << "Invalid heuristic algo = " << heuristic;
                     return (1);
