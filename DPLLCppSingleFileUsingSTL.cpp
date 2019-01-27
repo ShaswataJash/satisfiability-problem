@@ -81,8 +81,17 @@ public:
     }
 };
 
+// ========================================== DPLLAlgo ========================
+
+typedef enum HeuristicAlgo {
+    MOMS,
+    MAX_PRODUCT_POLARITY
+}HeuristicAlgo;
+
 class DPLLAlgo {
 private:
+
+    HeuristicAlgo algo;
 
     //For all the below three reference variable, data in them will be changed (majorly deleted but for unitClause, elements
     // can be added too) - thus caller of runDPLLAlgo() should rely sanctity of these variables after return from the functions.
@@ -95,7 +104,15 @@ private:
 
     int momsHeauristic(bool isDebug) const;
     int maxProductPolarityHeuristic(bool isDebug) const;
-    int chooseSplitVarAccordingtoHeuristic(bool isDebug) const;
+    int chooseSplitVarAccordingtoHeuristic(bool isDebug) const{
+
+        switch(algo){
+        case MOMS: return (momsHeauristic(isDebug));
+        case MAX_PRODUCT_POLARITY: return (maxProductPolarityHeuristic(isDebug));
+        }
+        assert(false);
+        return (0);
+    }
 
     static void deleteClause(int clauseSeqId, unordered_map<int, Clause>& my_clauseDB,
             unordered_map<int, unordered_set<int>>& my_umap) {
@@ -124,7 +141,7 @@ private:
             if (my_umap.erase(*iteratorForAffectedVars) <= 0) {
                 stringstream fmt;
                 fmt << __FILE__ << ':' << __LINE__ << " variable= " << (*iteratorForAffectedVars)
-                                                                                                                                        << " cannot be erased from umap";
+                                                                                        << " cannot be erased from umap";
                 throw std::logic_error(fmt.str());
             }
         }
@@ -153,18 +170,19 @@ private:
             unordered_set<int>& unitClause);
     static void printVarToClauseMapping(unordered_map<int, unordered_set<int>>& my_umap);
 
-    bool split(int var, bool isDebug, int recursionDepth);
+    bool split(int var, bool isDebug, int recursionDepth, bool singlePolarityRemoval);
     bool removeSingularPolarityVars(bool isDebug);
+    bool unitPropagate(bool isDebug);
 public:
-    bool runDPLLAlgo(bool isDebug, int recursionDepth);
+    bool runDPLLAlgo(bool isDebug, int recursionDepth, bool singlePolarityRemoval);
 
     list<int>& getSatResult() {
         return (satResult);
     }
 
-    DPLLAlgo(unordered_map<int, Clause>& my_clauseDB, unordered_map<int, unordered_set<int>>& my_umap,
+    DPLLAlgo(HeuristicAlgo my_algo, unordered_map<int, Clause>& my_clauseDB, unordered_map<int, unordered_set<int>>& my_umap,
             unordered_set<int>& my_unitClause) :
-                clauseDB(my_clauseDB), umap(my_umap), unitClause(my_unitClause) {
+                algo(my_algo), clauseDB(my_clauseDB), umap(my_umap), unitClause(my_unitClause) {
     }
 
 };
@@ -206,7 +224,7 @@ void DPLLAlgo::printVarToClauseMapping(unordered_map<int, unordered_set<int>>& m
         if (0 == (itr->second).size()) {
             stringstream fmt;
             fmt << __FILE__ << ':' << __LINE__ << " variable= " << (itr->first)
-                                                                                                                                    << " has zero length clause list!!! in umap";
+                                                                                    << " has zero length clause list!!! in umap";
             throw std::logic_error(fmt.str());
         }
 
@@ -219,7 +237,7 @@ void DPLLAlgo::printVarToClauseMapping(unordered_map<int, unordered_set<int>>& m
     cout << endl << std::flush;
 }
 
-bool DPLLAlgo::split(int var, bool isDebug, int recursionDepth) {
+bool DPLLAlgo::split(int var, bool isDebug, int recursionDepth, bool singlePolarityRemoval) {
 
     if (isDebug) {
         cout << "[Depth=" << (recursionDepth - 1) << "]Splited on = " << var << endl << std::flush;
@@ -258,8 +276,8 @@ bool DPLLAlgo::split(int var, bool isDebug, int recursionDepth) {
         }
     }
 
-    DPLLAlgo algoForNextRecursion(my_clauseDB, my_umap, my_unitClause);
-    if (true == algoForNextRecursion.runDPLLAlgo(isDebug, recursionDepth)) {
+    DPLLAlgo algoForNextRecursion(algo, my_clauseDB, my_umap, my_unitClause);
+    if (true == algoForNextRecursion.runDPLLAlgo(isDebug, recursionDepth, singlePolarityRemoval)) {
         satResult.push_back(var);
         list<int>& res = algoForNextRecursion.getSatResult();
         list<int>::iterator resIt;
@@ -274,66 +292,89 @@ bool DPLLAlgo::split(int var, bool isDebug, int recursionDepth) {
 
 //MOMS heuristic
 int DPLLAlgo::momsHeauristic(bool isDebug) const {
-    map<int, list<int>> sizeToClauseIdMapping;
+
+    //STAGE1: First create map for size of clause to clause-id mapping
+    map<int, list<int>> sizeToClauseIdMapping; //it will be default ordered in ascending (i.e. lower size clauses to higher ones)
     unordered_map<int, Clause>::iterator itr1;
     for (itr1 = clauseDB.begin(); itr1 != clauseDB.end(); itr1++) {
         sizeToClauseIdMapping[(itr1->second).getVariablesListSize()].push_back((itr1->second).getUniqueID());
     }
 
-    map<int, list<int>>::iterator itr2 = sizeToClauseIdMapping.lower_bound(2); //start iterate only from size 2
-    list<int>& clauseids = itr2->second; //choose the list of clauses with lowest sizes ex. 2, 3 and so on
-    if (isDebug) {
-        list<int>::iterator ditr1;
-        cout << "<MOMS> Clause-ids with min size of " << itr2->first << ':';
-        for (ditr1 = clauseids.begin(); ditr1 != clauseids.end(); ditr1++) {
-            cout << *ditr1 << ',';
+    map<int, list<int>>::iterator itr2 ;
+    for( itr2 = sizeToClauseIdMapping.lower_bound(2); itr2 != sizeToClauseIdMapping.end(); itr2 ++){ //start iterate only from size 2
+        list<int>& clauseids = itr2->second; //choose the list of clauses with lowest sizes ex. 2, 3 and so on
+        if (isDebug) {
+            list<int>::iterator ditr1;
+            cout << "<MOMS> Clause-ids with min size of " << itr2->first << ':';
+            for (ditr1 = clauseids.begin(); ditr1 != clauseids.end(); ditr1++) {
+                cout << *ditr1 << ',';
+            }
+            cout << endl << std::flush;
         }
-        cout << endl << std::flush;
-    }
 
-    unordered_map<int, int> varToFreqCount;
-    list<int>::iterator itr3;
-    for (itr3 = clauseids.begin(); itr3 != clauseids.end(); itr3++) {
-        //now iterate variables under specific clause-id to get the variable with maximum occurring
-        Clause& c = clauseDB[*itr3];
-        list<int> vars;
-        c.fillWithVars(vars);
-        list<int>::iterator itr4;
-        for (itr4 = vars.begin(); itr4 != vars.end(); itr4++) {
-            /*
-             * Count elements with a specific key. Searches the container for elements with a key equivalent to k and returns the number of matches.
-             *  Because all elements in a map container are unique, the function can only return 1 (if the element is found) or zero (otherwise).
-             */
-            if (varToFreqCount.find(*itr4) != varToFreqCount.end()) {
-                varToFreqCount[*itr4]++;
-            } else {
-                varToFreqCount[*itr4] = 1;
+        //STAGE2: Now for each variables in lowest size clauses, find out variables with max freq
+        //STAGE2.1 -> first create variables to freq map
+        unordered_map<int, int> varToFreqCount;
+        list<int>::iterator itr3;
+        for (itr3 = clauseids.begin(); itr3 != clauseids.end(); itr3++) {
+            //now iterate variables under specific clause-id to get the variable with maximum occurring
+            Clause& c = clauseDB[*itr3];
+            list<int> vars;
+            c.fillWithVars(vars);
+            list<int>::iterator itr4;
+            for (itr4 = vars.begin(); itr4 != vars.end(); itr4++) {
+                /*
+                 * Count elements with a specific key. Searches the container for elements with a key equivalent to k and returns the number of matches.
+                 *  Because all elements in a map container are unique, the function can only return 1 (if the element is found) or zero (otherwise).
+                 */
+                if (varToFreqCount.find(*itr4) != varToFreqCount.end()) {
+                    varToFreqCount[*itr4]++;
+                } else {
+                    varToFreqCount[*itr4] = 1;
+                }
             }
         }
-    }
 
-    unordered_map<int, int>::iterator itr5;
-    map<int, list<int>, greater<int> > occurenceFreToVarMap; //descending order storage
-    for (itr5 = varToFreqCount.begin(); itr5 != varToFreqCount.end(); itr5++) {
-        occurenceFreToVarMap[itr5->second].push_back(itr5->first);
-    }
-
-    list<int>& varsWithMaxOccur = occurenceFreToVarMap.begin()->second; //now get vars with max occurring
-    if (isDebug) {
-        list<int>::iterator ditr1;
-        cout << "<MOMS> Vars impacting maximally " << occurenceFreToVarMap.begin()->first << " clauses:";
-        for (ditr1 = varsWithMaxOccur.begin(); ditr1 != varsWithMaxOccur.end(); ditr1++) {
-            cout << *ditr1 << ',';
+        //STAGE2.2: now reverse the mapping from freq to variables
+        unordered_map<int, int>::iterator itr5;
+        map<int, list<int>, greater<int> > occurenceFreToVarMap; //descending order storage
+        for (itr5 = varToFreqCount.begin(); itr5 != varToFreqCount.end(); itr5++) {
+            occurenceFreToVarMap[itr5->second].push_back(itr5->first);
         }
-        cout << endl << std::flush;
-    }
 
-    list<int>::iterator ditr1;
-    for (ditr1 = varsWithMaxOccur.begin(); ditr1 != varsWithMaxOccur.end(); ditr1++) {
-        //TODO: tie-break
-        if((umap.find(*ditr1) != umap.end()) && (umap.find((*ditr1) * -1) != umap.end())){
-            return ((*ditr1) * -1); //intention is to trigger as much as possible reduction of clauses (not removal of clause)
+        //STAGE3: start picking up variable (with max occurrence in min size clause) which has both polarity
+        map<int, list<int>>::iterator itr6;
+        for(itr6 =  occurenceFreToVarMap.begin(); itr6 != occurenceFreToVarMap.end(); itr6++){
+            list<int>& varsWithMaxOccur = itr6->second;
+            if (isDebug) {
+                list<int>::iterator ditr1;
+                cout << "<MOMS> Vars impacting maximally " << (itr6->first) << " clauses:";
+                for (ditr1 = varsWithMaxOccur.begin(); ditr1 != varsWithMaxOccur.end(); ditr1++) {
+                    cout << *ditr1 << ',';
+                }
+                cout << endl << std::flush;
+            }
+
+            list<int>::iterator itr7;
+            int productPolarityMetric = 0;
+            int chosenVar = 0;
+            for (itr7 = varsWithMaxOccur.begin(); itr7 != varsWithMaxOccur.end(); itr7++) {
+                //STAGE tie-breaking
+                if ((umap.find(*itr7) != umap.end()) && (umap.find((*itr7) * -1) != umap.end())) {
+                    int currentProduct = umap[*itr7].size() * umap[(*itr7) * -1].size();
+                    if(currentProduct > productPolarityMetric){
+                        chosenVar = *itr7;
+                        productPolarityMetric = currentProduct;
+                    }
+                }
+            }
+
+            if(productPolarityMetric > 0){
+                return (chosenVar * -1); //intention is to trigger as much as possible reduction of clauses (not removal of clause)
+            }
+
         }
+
     }
 
     assert(false);
@@ -383,16 +424,11 @@ int DPLLAlgo::maxProductPolarityHeuristic(bool isDebug) const {
     return (candidateVar); //intention is both together as much clause is removed, simultaneously reduction happens - thus product is matrices instead of sum
 }
 
-int DPLLAlgo::chooseSplitVarAccordingtoHeuristic(bool isDebug) const {
-    return (momsHeauristic(isDebug));
-    //return (maxProductPolarityHeuristic(isDebug));
-}
-
-bool DPLLAlgo::removeSingularPolarityVars(bool isDebug){
+bool DPLLAlgo::removeSingularPolarityVars(bool isDebug) {
 
     int loopCount = 0;
 
-    while(true){
+    while (true) {
 
         unordered_map<int, unordered_set<int>>::iterator itr;
         unordered_set<int> clausesToBeDeleted;
@@ -401,10 +437,11 @@ bool DPLLAlgo::removeSingularPolarityVars(bool isDebug){
         //to capture the affected clauses for singular polarity variable
         bool isAtleastOneSinglePolarityVarFound = false;
         for (itr = umap.begin(); itr != umap.end(); itr++) {
-            if(umap.find(itr->first * -1) == umap.end()){ //single polarity variable
+            if (umap.find(itr->first * -1) == umap.end()) { //single polarity variable
 
-                if(isDebug){
-                    cout << "<Loop=" << loopCount << '>' << "Single polarity var = " << itr->first << endl << std::flush;
+                if (isDebug) {
+                    cout << "<Loop=" << loopCount << '>' << "Single polarity var = " << itr->first << endl
+                            << std::flush;
                 }
                 isAtleastOneSinglePolarityVarFound = true;
                 satResult.push_back(itr->first);
@@ -418,18 +455,18 @@ bool DPLLAlgo::removeSingularPolarityVars(bool isDebug){
             }
         }
 
-        if(!isAtleastOneSinglePolarityVarFound){
+        if (!isAtleastOneSinglePolarityVarFound) {
             break;
         }
 
-        if(isDebug){
+        if (isDebug) {
             unordered_set<int>::iterator iteratorForAffectedClauseIds;
             cout << "clauses to be deleted for single polarity reduction: ";
             for (iteratorForAffectedClauseIds = clausesToBeDeleted.begin();
                     iteratorForAffectedClauseIds != clausesToBeDeleted.end(); iteratorForAffectedClauseIds++) {
                 cout << *iteratorForAffectedClauseIds << ',';
             }
-            cout <<endl << std::flush;
+            cout << endl << std::flush;
         }
 
         unordered_set<int>::iterator iteratorForAffectedClauseIds;
@@ -438,22 +475,14 @@ bool DPLLAlgo::removeSingularPolarityVars(bool isDebug){
             deleteClause(*iteratorForAffectedClauseIds, clauseDB, umap);
         }
 
-        loopCount ++;
+        loopCount++;
     }
 
     return ((loopCount > 0) ? true : false);
 }
 
-bool DPLLAlgo::runDPLLAlgo(bool isDebug, int recursionDepth) {
-
-    if (isDebug) {
-        printDebugInfo(recursionDepth, clauseDB, unitClause);
-        printVarToClauseMapping(umap);
-    }
-
-    int originalUnitClauseSize = unitClause.size();
-
-    if (originalUnitClauseSize > 0) {
+bool DPLLAlgo::unitPropagate(bool isDebug) {
+    if (unitClause.size() > 0) {
         unordered_set<int>::iterator entryUnitClauseIt;
         for (entryUnitClauseIt = unitClause.begin(); entryUnitClauseIt != unitClause.end(); entryUnitClauseIt++) {
             //Ensure any unit clause handled is retained as history in conflictDetectorForUnitClause
@@ -538,30 +567,49 @@ bool DPLLAlgo::runDPLLAlgo(bool isDebug, int recursionDepth) {
         }
     }
 
+    return (true);
+}
+
+bool DPLLAlgo::runDPLLAlgo(bool isDebug, int recursionDepth, bool singlePolarityRemoval) {
+
+    if (isDebug) {
+        printDebugInfo(recursionDepth, clauseDB, unitClause);
+        printVarToClauseMapping(umap);
+    }
+
+    int originalUnitClauseSize = unitClause.size();
+    if (!unitPropagate(isDebug)) {
+        return (false); //conflict detected
+    }
+
     if (clauseDB.empty() && unitClause.empty()) {
         return (true); //SAT
     }
 
     if (isDebug && (originalUnitClauseSize > 0)) {
-        cout << "After unit clause reduction - " << "Clause count = " << clauseDB.size() << " variable count = " << umap.size() << endl;
+        cout << "After unit clause reduction - " << "Clause count = " << clauseDB.size() << " variable count = "
+                << umap.size() << endl;
         printDebugInfo(recursionDepth, clauseDB, unitClause);
         printVarToClauseMapping(umap);
     }
 
-    bool singlePolarReduction = removeSingularPolarityVars(isDebug);
-    if (isDebug && singlePolarReduction) {
-        cout << "After single Polar reduction - " << "Clause count = " << clauseDB.size() << " variable count = " << umap.size() << endl;
-        printDebugInfo(recursionDepth, clauseDB, unitClause);
-        printVarToClauseMapping(umap);
+    if(singlePolarityRemoval){
+        bool singlePolarReduction = removeSingularPolarityVars(isDebug);
+        if (isDebug && singlePolarReduction) {
+            cout << "After single Polar reduction - " << "Clause count = " << clauseDB.size() << " variable count = "
+                    << umap.size() << endl;
+            printDebugInfo(recursionDepth, clauseDB, unitClause);
+            printVarToClauseMapping(umap);
+        }
     }
 
     int splitVar = chooseSplitVarAccordingtoHeuristic(isDebug);
 
-    if (split(splitVar, isDebug, recursionDepth + 1)) {
+    if (split(splitVar, isDebug, recursionDepth + 1, singlePolarityRemoval)) {
         return (true);
     }
 
-    if (split(splitVar * -1, isDebug, recursionDepth + 1)) {
+    if (split(splitVar * -1, isDebug, recursionDepth + 1, singlePolarityRemoval)) {
         return (true);
     }
 
@@ -603,7 +651,7 @@ public:
 
 // ======================= DimacsParser.cpp ================
 DimacsParser::DimacsParser() :
-                                                                                                                        maxVarCount(0), maxClauseCount(0), currentParsedClauseIndex(0) {
+                                                                        maxVarCount(0), maxClauseCount(0), currentParsedClauseIndex(0) {
 }
 
 DimacsParser::~DimacsParser() {
@@ -753,31 +801,31 @@ class DirectoryListing {
 private:
     list<string> listOfFileName;
 public:
-    bool openDir(char* dirPath){
+    bool openDir(char* dirPath) {
         DIR *dir;
         struct dirent *ent;
-        if ((dir = opendir (dirPath)) != NULL) {
+        if ((dir = opendir(dirPath)) != NULL) {
             /* print all the files and directories within directory */
-            while ((ent = readdir (dir)) != NULL) {
+            while ((ent = readdir(dir)) != NULL) {
                 string fileName(dirPath);
                 fileName.append("\\");
                 listOfFileName.push_back(fileName.append(ent->d_name));
             }
-            closedir (dir);
+            closedir(dir);
             return (true);
         } else {
             return (false);
         }
     }
 
-    void getFileNames(list<string>& filenames){
-        filenames = listOfFileName;//copying
+    void getFileNames(list<string>& filenames) {
+        filenames = listOfFileName; //copying
     }
 };
 
 // ============================ MAIN ====================
 
-bool determineSATOrUNSAT(FILE* in, bool debug, bool isTimingToBePrinted){
+bool determineSATOrUNSAT(FILE* in, bool debug, bool isTimingToBePrinted, bool singlePolarityRemoval, HeuristicAlgo algo) {
     try {
 
         DimacsParser dimParser;
@@ -791,10 +839,10 @@ bool determineSATOrUNSAT(FILE* in, bool debug, bool isTimingToBePrinted){
         long long microseconds = -1;
         auto start = std::chrono::high_resolution_clock::now();
 
-        DPLLAlgo dpLLAlgo(dimParser.getClauses(), dimParser.getVarToClauseMapping(),
+        DPLLAlgo dpLLAlgo(algo, dimParser.getClauses(), dimParser.getVarToClauseMapping(),
                 dimParser.getListOfUnitClausesIfAny());
 
-        if (dpLLAlgo.runDPLLAlgo(debug, 0)) {
+        if (dpLLAlgo.runDPLLAlgo(debug, 0, singlePolarityRemoval)) {
 
             auto elapsed = std::chrono::high_resolution_clock::now() - start;
             microseconds = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
@@ -826,7 +874,7 @@ bool determineSATOrUNSAT(FILE* in, bool debug, bool isTimingToBePrinted){
             cout << "UNSAT" << std::flush;
         }
 
-        if(isTimingToBePrinted){
+        if (isTimingToBePrinted) {
             cout << endl << "Time elapsed (micro-sec) = " << microseconds << endl << std::flush;
         }
 
@@ -845,24 +893,38 @@ int main(int argc, char *argv[]) {
     bool debug = false;
     bool isTimingToBePrinted = false;
     bool isDirectoryMode = false;
+    bool singlePolarityRemoval = false;
     char* dir = NULL;
+    HeuristicAlgo algo = MOMS;
 
-    if(argc > 1){
-        for (int i=1; i < argc; i++){
-            if( 0 == strcmp("-d", argv[i])){
+    if (argc > 1) {
+        for (int i = 1; i < argc; i++) {
+            if (0 == strcmp("-d", argv[i])) {
                 debug = true;
-            } else if( 0 == strcmp("-t", argv[i])){
+            } else if (0 == strcmp("-t", argv[i])) {
                 isTimingToBePrinted = true;
-            } else if (0 == strcmp("-dir", argv[i])){
+            } else if (0 == strcmp("-dir", argv[i])) {
                 isDirectoryMode = true;
-                dir = argv[i+1];
+                dir = argv[i + 1];
+            } else if (0 == strcmp("-p", argv[i])) {
+                singlePolarityRemoval = true;
+            } else if (0 == strcmp("-h", argv[i])) {
+                char* heuristic = argv[i + 1];
+                if(0 == strcmp("MOMS", heuristic)){
+                    algo = MOMS;
+                } else if (0 == strcmp("MAX_PRODUCT_POLARITY", heuristic)) {
+                    algo = MAX_PRODUCT_POLARITY;
+                } else {
+                    cerr << "Invalid heuristic algo = " << heuristic;
+                    return (1);
+                }
             }
         }
     }
 
-    if(isDirectoryMode){
+    if (isDirectoryMode) {
         DirectoryListing dirListing;
-        if(!dirListing.openDir(dir)){
+        if (!dirListing.openDir(dir)) {
             cerr << "directory listing failed for " << dir;
             return (1);
         }
@@ -870,20 +932,19 @@ int main(int argc, char *argv[]) {
         list<string> files;
         dirListing.getFileNames(files);
         list<string>::iterator it;
-        for(it = files.begin(); it != files.end(); it ++){
+        for (it = files.begin(); it != files.end(); it++) {
             cout << *it << endl << std::flush;
             FILE* file = fopen((*it).c_str(), "r");
-            determineSATOrUNSAT(file, debug, isTimingToBePrinted);
+            determineSATOrUNSAT(file, debug, isTimingToBePrinted, singlePolarityRemoval, algo);
             fclose(file);
         }
 
-    }else {
-        if(!determineSATOrUNSAT(stdin, debug, isTimingToBePrinted)){
+    } else {
+        if (!determineSATOrUNSAT(stdin, debug, isTimingToBePrinted, singlePolarityRemoval, algo)) {
             cerr << "determineSATOrUNSAT failed from stdin";
             return (1);
         }
     }
-
 
     return (0);
 }
