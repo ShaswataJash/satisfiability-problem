@@ -84,9 +84,8 @@ public:
 // ========================================== DPLLAlgo ========================
 
 typedef enum HeuristicAlgo {
-    MOMS,
-    MAX_PRODUCT_POLARITY
-}HeuristicAlgo;
+    MOMS, MAX_PRODUCT_POLARITY
+} HeuristicAlgo;
 
 class DPLLAlgo {
 private:
@@ -104,11 +103,13 @@ private:
 
     int momsHeauristic(bool isDebug) const;
     int maxProductPolarityHeuristic(bool isDebug) const;
-    int chooseSplitVarAccordingtoHeuristic(bool isDebug) const{
+    int chooseSplitVarAccordingtoHeuristic(bool isDebug) const {
 
-        switch(algo){
-        case MOMS: return (momsHeauristic(isDebug));
-        case MAX_PRODUCT_POLARITY: return (maxProductPolarityHeuristic(isDebug));
+        switch (algo) {
+        case MOMS:
+            return (momsHeauristic(isDebug));
+        case MAX_PRODUCT_POLARITY:
+            return (maxProductPolarityHeuristic(isDebug));
         }
         assert(false);
         return (0);
@@ -141,7 +142,7 @@ private:
             if (my_umap.erase(*iteratorForAffectedVars) <= 0) {
                 stringstream fmt;
                 fmt << __FILE__ << ':' << __LINE__ << " variable= " << (*iteratorForAffectedVars)
-                                                                                        << " cannot be erased from umap";
+                        << " cannot be erased from umap";
                 throw std::logic_error(fmt.str());
             }
         }
@@ -180,9 +181,9 @@ public:
         return (satResult);
     }
 
-    DPLLAlgo(HeuristicAlgo my_algo, unordered_map<int, Clause>& my_clauseDB, unordered_map<int, unordered_set<int>>& my_umap,
-            unordered_set<int>& my_unitClause) :
-                algo(my_algo), clauseDB(my_clauseDB), umap(my_umap), unitClause(my_unitClause) {
+    DPLLAlgo(HeuristicAlgo my_algo, unordered_map<int, Clause>& my_clauseDB,
+            unordered_map<int, unordered_set<int>>& my_umap, unordered_set<int>& my_unitClause) :
+            algo(my_algo), clauseDB(my_clauseDB), umap(my_umap), unitClause(my_unitClause) {
     }
 
 };
@@ -224,7 +225,7 @@ void DPLLAlgo::printVarToClauseMapping(unordered_map<int, unordered_set<int>>& m
         if (0 == (itr->second).size()) {
             stringstream fmt;
             fmt << __FILE__ << ':' << __LINE__ << " variable= " << (itr->first)
-                                                                                    << " has zero length clause list!!! in umap";
+                    << " has zero length clause list!!! in umap";
             throw std::logic_error(fmt.str());
         }
 
@@ -251,8 +252,8 @@ bool DPLLAlgo::split(int var, bool isDebug, int recursionDepth, bool singlePolar
 
     assert(my_umap.find(var) != my_umap.end()); //as removeSingularPolarityVars() has removed single polarity vars
 
-    //Caution: do not use reference for listOfAffectedClauses. If we do so, we may land up in deleting from the same list
-    //within deleteClause() which is being accessed (by reference) for iteration of affected clause
+            //Caution: do not use reference for listOfAffectedClauses. If we do so, we may land up in deleting from the same list
+            //within deleteClause() which is being accessed (by reference) for iteration of affected clause
     unordered_set<int> listOfAffectedClauses = my_umap[var];
     unordered_set<int>::iterator iteratorForAffectedClauseIds;
     for (iteratorForAffectedClauseIds = listOfAffectedClauses.begin();
@@ -300,8 +301,8 @@ int DPLLAlgo::momsHeauristic(bool isDebug) const {
         sizeToClauseIdMapping[(itr1->second).getVariablesListSize()].push_back((itr1->second).getUniqueID());
     }
 
-    map<int, list<int>>::iterator itr2 ;
-    for( itr2 = sizeToClauseIdMapping.lower_bound(2); itr2 != sizeToClauseIdMapping.end(); itr2 ++){ //start iterate only from size 2
+    map<int, list<int>>::iterator itr2;
+    for (itr2 = sizeToClauseIdMapping.lower_bound(2); itr2 != sizeToClauseIdMapping.end(); itr2++) { //start iterate only from size 2
         list<int>& clauseids = itr2->second; //choose the list of clauses with lowest sizes ex. 2, 3 and so on
         if (isDebug) {
             list<int>::iterator ditr1;
@@ -344,7 +345,7 @@ int DPLLAlgo::momsHeauristic(bool isDebug) const {
 
         //STAGE3: start picking up variable (with max occurrence in min size clause) which has both polarity
         map<int, list<int>>::iterator itr6;
-        for(itr6 =  occurenceFreToVarMap.begin(); itr6 != occurenceFreToVarMap.end(); itr6++){
+        for (itr6 = occurenceFreToVarMap.begin(); itr6 != occurenceFreToVarMap.end(); itr6++) {
             list<int>& varsWithMaxOccur = itr6->second;
             if (isDebug) {
                 list<int>::iterator ditr1;
@@ -362,14 +363,14 @@ int DPLLAlgo::momsHeauristic(bool isDebug) const {
                 //STAGE tie-breaking
                 if ((umap.find(*itr7) != umap.end()) && (umap.find((*itr7) * -1) != umap.end())) {
                     int currentProduct = umap[*itr7].size() * umap[(*itr7) * -1].size();
-                    if(currentProduct > productPolarityMetric){
+                    if (currentProduct > productPolarityMetric) {
                         chosenVar = *itr7;
                         productPolarityMetric = currentProduct;
                     }
                 }
             }
 
-            if(productPolarityMetric > 0){
+            if (productPolarityMetric > 0) {
                 return (chosenVar * -1); //intention is to trigger as much as possible reduction of clauses (not removal of clause)
             }
 
@@ -593,7 +594,7 @@ bool DPLLAlgo::runDPLLAlgo(bool isDebug, int recursionDepth, bool singlePolarity
         printVarToClauseMapping(umap);
     }
 
-    if(singlePolarityRemoval){
+    if (singlePolarityRemoval) {
         bool singlePolarReduction = removeSingularPolarityVars(isDebug);
         if (isDebug && singlePolarReduction) {
             cout << "After single Polar reduction - " << "Clause count = " << clauseDB.size() << " variable count = "
@@ -651,7 +652,7 @@ public:
 
 // ======================= DimacsParser.cpp ================
 DimacsParser::DimacsParser() :
-                                                                        maxVarCount(0), maxClauseCount(0), currentParsedClauseIndex(0) {
+        maxVarCount(0), maxClauseCount(0), currentParsedClauseIndex(0) {
 }
 
 DimacsParser::~DimacsParser() {
@@ -825,7 +826,8 @@ public:
 
 // ============================ MAIN ====================
 
-bool determineSATOrUNSAT(FILE* in, bool debug, bool isTimingToBePrinted, bool singlePolarityRemoval, HeuristicAlgo algo) {
+bool determineSATOrUNSAT(FILE* in, bool debug, bool isTimingToBePrinted, bool singlePolarityRemoval,
+        HeuristicAlgo algo) {
     try {
 
         DimacsParser dimParser;
@@ -910,7 +912,7 @@ int main(int argc, char *argv[]) {
                 singlePolarityRemoval = true;
             } else if (0 == strcmp("-h", argv[i])) {
                 char* heuristic = argv[i + 1];
-                if(0 == strcmp("MOMS", heuristic)){
+                if (0 == strcmp("MOMS", heuristic)) {
                     algo = MOMS;
                 } else if (0 == strcmp("MAX_PRODUCT_POLARITY", heuristic)) {
                     algo = MAX_PRODUCT_POLARITY;
