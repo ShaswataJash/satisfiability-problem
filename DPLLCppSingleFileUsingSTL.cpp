@@ -106,7 +106,7 @@ private:
 
     int momsHeuristic(bool isDebug) const;
     int maxProductPolarityHeuristic(bool isDebug) const;
-    int maxUnitPropTriggerHeuristic(bool isDebug) ;
+    int maxUnitPropTriggerHeuristic(bool isDebug);
 
     int chooseSplitVarAccordingtoHeuristic(bool isDebug) {
 
@@ -150,7 +150,7 @@ private:
             if (my_umap.erase(*iteratorForAffectedVars) <= 0) {
                 stringstream fmt;
                 fmt << __FILE__ << ':' << __LINE__ << " variable= " << (*iteratorForAffectedVars)
-                                                << " cannot be erased from umap";
+                        << " cannot be erased from umap";
                 throw std::logic_error(fmt.str());
             }
         }
@@ -193,7 +193,7 @@ public:
 
     DPLLAlgo(HeuristicAlgo my_algo, unordered_map<int, Clause>& my_clauseDB,
             unordered_map<int, unordered_set<int>>& my_umap, unordered_set<int>& my_unitClause) :
-                algo(my_algo), clauseDB(my_clauseDB), umap(my_umap), unitClause(my_unitClause), unitClauseReductionCount(0) {
+            algo(my_algo), clauseDB(my_clauseDB), umap(my_umap), unitClause(my_unitClause), unitClauseReductionCount(0) {
     }
 
 };
@@ -237,7 +237,7 @@ void DPLLAlgo::printVarToClauseMapping(unordered_map<int, unordered_set<int>>& m
         if (0 == (itr->second).size()) {
             stringstream fmt;
             fmt << __FILE__ << ':' << __LINE__ << " variable= " << (itr->first)
-                                            << " has zero length clause list!!! in umap";
+                    << " has zero length clause list!!! in umap";
             throw std::logic_error(fmt.str());
         }
 
@@ -391,7 +391,7 @@ int DPLLAlgo::momsHeuristic(bool isDebug) const {
                 //ensure we get only bi-polar variables here
                 if ((umap.find(*itr7) != umap.end()) && (umap.find((*itr7) * -1) != umap.end())) {
                     int currentProduct = umap[*itr7].size() * umap[(*itr7) * -1].size();
-                    if (currentProduct > productPolarityMetric) {//STAGE tie-breaking
+                    if (currentProduct > productPolarityMetric) {                //STAGE tie-breaking
                         chosenVar = *itr7;
                         productPolarityMetric = currentProduct;
                     }
@@ -456,21 +456,21 @@ int DPLLAlgo::maxProductPolarityHeuristic(bool isDebug) const {
 int DPLLAlgo::maxUnitPropTriggerHeuristic(bool isDebug) {
     int maxUnitPropTrigger = -1;
     int correspondingVar = 0;
-    if(isDebug){
-        cout << "[maxUnitPropTriggerHeuristic]" ;
+    if (isDebug) {
+        cout << "[maxUnitPropTriggerHeuristic]";
     }
     unordered_map<int, int>::iterator it;
-    for(it = splitVarToUnitPropFreq.begin(); it != splitVarToUnitPropFreq.end(); it ++){
-        if(it->second > maxUnitPropTrigger){
+    for (it = splitVarToUnitPropFreq.begin(); it != splitVarToUnitPropFreq.end(); it++) {
+        if (it->second > maxUnitPropTrigger) {
             maxUnitPropTrigger = it->second;
             correspondingVar = it->first;
         }
-        if(isDebug){
+        if (isDebug) {
             cout << "(" << it->first << "," << it->second << ") ";
         }
     }
 
-    if(isDebug){
+    if (isDebug) {
         cout << "chosen var = " << correspondingVar << endl << std::flush;
     }
     return (correspondingVar);
@@ -524,9 +524,9 @@ bool DPLLAlgo::lookAheadUnitPropagate(bool isDebug) {
                 cout << "[lookAheadUnitPropagate]Variable = " << var << " negative conflict" << endl << std::flush;
             }
             varToBeSet.push_back(var);
-        } else{
+        } else {
             splitVarToUnitPropFreq[var] = algoForNextRecursion_var.unitClauseReductionCount;
-            splitVarToUnitPropFreq[var*-1] = algoForNextRecursion_varNot.unitClauseReductionCount;
+            splitVarToUnitPropFreq[var * -1] = algoForNextRecursion_varNot.unitClauseReductionCount;
         }
 
     }
@@ -633,7 +633,7 @@ bool DPLLAlgo::unitPropagate(bool isDebug) {
         int complementUnitVar = unitVar * -1;
 
         satResult.push_back(unitVar);
-        unitClauseReductionCount ++;
+        unitClauseReductionCount++;
 
         //The first check with respect to umap.find is very important , without that unnecessary blank element with complementUnitVar will be inserted in umap
         //It is important to note that we can landup into following scenarios where below mentioned checks are necessary
@@ -725,11 +725,11 @@ bool DPLLAlgo::runDPLLAlgo(bool isDebug, int recursionDepth) {
         printVarToClauseMapping(umap);
     }
 
-    if (clauseDB.empty() ) {
-        if (isDebug){
-            cout << "Re-triggering unit clause reduction" << endl << std::flush;
-        }
-        if(!unitClause.empty()){
+    if (clauseDB.empty()) {
+        if (!unitClause.empty()) {
+            if (isDebug) {
+                cout << "Re-triggering unit clause reduction" << endl << std::flush;
+            }
             return (unitPropagate(isDebug));
         }
         return (true); //SAT
@@ -786,7 +786,7 @@ public:
 
 // ======================= DimacsParser.cpp ================
 DimacsParser::DimacsParser() :
-                                maxVarCount(0), maxClauseCount(0), currentParsedClauseIndex(0) {
+        maxVarCount(0), maxClauseCount(0), currentParsedClauseIndex(0) {
 }
 
 DimacsParser::~DimacsParser() {
