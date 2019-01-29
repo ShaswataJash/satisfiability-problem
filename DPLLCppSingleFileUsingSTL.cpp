@@ -150,7 +150,7 @@ private:
             if (my_umap.erase(*iteratorForAffectedVars) <= 0) {
                 stringstream fmt;
                 fmt << __FILE__ << ':' << __LINE__ << " variable= " << (*iteratorForAffectedVars)
-                                        << " cannot be erased from umap";
+                                                << " cannot be erased from umap";
                 throw std::logic_error(fmt.str());
             }
         }
@@ -237,7 +237,7 @@ void DPLLAlgo::printVarToClauseMapping(unordered_map<int, unordered_set<int>>& m
         if (0 == (itr->second).size()) {
             stringstream fmt;
             fmt << __FILE__ << ':' << __LINE__ << " variable= " << (itr->first)
-                                    << " has zero length clause list!!! in umap";
+                                            << " has zero length clause list!!! in umap";
             throw std::logic_error(fmt.str());
         }
 
@@ -691,6 +691,7 @@ bool DPLLAlgo::unitPropagate(bool isDebug) {
 bool DPLLAlgo::runDPLLAlgo(bool isDebug, int recursionDepth) {
 
     if (isDebug) {
+        cout << "Initially - " << "Clause count = " << clauseDB.size() << " variable count = " << umap.size() << endl;
         printDebugInfo(recursionDepth, clauseDB, unitClause);
         printVarToClauseMapping(umap);
     }
@@ -722,6 +723,16 @@ bool DPLLAlgo::runDPLLAlgo(bool isDebug, int recursionDepth) {
                 << umap.size() << endl;
         printDebugInfo(recursionDepth, clauseDB, unitClause);
         printVarToClauseMapping(umap);
+    }
+
+    if (clauseDB.empty() ) {
+        if (isDebug){
+            cout << "Re-triggering unit clause reduction" << endl << std::flush;
+        }
+        if(!unitClause.empty()){
+            return (unitPropagate(isDebug));
+        }
+        return (true); //SAT
     }
 
     int splitVar = chooseSplitVarAccordingtoHeuristic(isDebug);
@@ -775,7 +786,7 @@ public:
 
 // ======================= DimacsParser.cpp ================
 DimacsParser::DimacsParser() :
-                        maxVarCount(0), maxClauseCount(0), currentParsedClauseIndex(0) {
+                                maxVarCount(0), maxClauseCount(0), currentParsedClauseIndex(0) {
 }
 
 DimacsParser::~DimacsParser() {
