@@ -3,6 +3,7 @@
 // Author      : Shaswata Jash
 // Version     :
 // Description : Implementation of DPLL Algorithm with additional enhancement of lookAheadUnitPropagate, removeSingularPolarityVars
+//               Input formula is accepted in CNF (Conjunctive Normal form) and is represented through DIMACS format.
 //============================================================================
 
 /******************************************************************************************************************************
@@ -1016,6 +1017,7 @@ void DimacsParser::parseClauseLine(const char* line) {
     currentParsedClauseIndex++;
 }
 
+//FILE* is used for performance purpose - although it is c-styled
 void DimacsParser::parse(FILE* in, bool isDebug) {
     char* line = NULL;
     size_t len = 0;
