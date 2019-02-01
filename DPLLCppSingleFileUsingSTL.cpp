@@ -13,7 +13,7 @@
  * [2] Further each literal maintains a reverse mapping to the clauseids where they are found. This data-structure is also maintained
  *     through unordered_map<int, unordered_set<int>> where key is literals and values are clause-ids. This is represented through 'umap'.
  *     We maintain this reverse mapping because as part of unit-clause propagation and splitting, while assigning a literal to one, we need to
- *     quickly able to find out where teh partcular literal is situated. It can be better understood by tracking deleteVarFromClause() function
+ *     quickly able to find out where the particular literal is situated. It can be better understood by tracking deleteVarFromClause() function
  *     and its call from unitPropagate() and setVariableToTrue() functions. This also means any removal of clause-id has to update this reverse
  *     mapping too. Refer deleteClause() function and how umaps are updated from there.
  * [3] A dedicated list which maintains any unit-clause (represented through 'unitClause'). Further note that, when clauses from clauseDB is converted into unit-clause
@@ -22,6 +22,66 @@
  * [4] satResult is a list which holds assignment result of the literals.
  *
  *****************************************************************************************************************************/
+
+/****************************************************************************************************************************
+ * Brief description of code-flow
+ * runDPLLAlgo(bool isDebug, int recursionDepth) {
+
+    if (!unitPropagate(isDebug)) {
+        return (false); //conflict detected
+    }
+
+    if (clauseDB.empty() && unitClause.empty()) {
+        return (true); //SAT
+    }
+
+    bool lookAheadUnitProp = (!isLookAheadUnitPropStepEnabled) ? true : lookAheadUnitPropagate(isDebug);
+    if (!lookAheadUnitProp) {
+        return (false); //conflict detected
+    }
+
+    removeSingularPolarityVars(isDebug);
+
+    if (clauseDB.empty()) {
+        if (!unitClause.empty()) {
+            if (isDebug) {
+                cout << "Re-triggering unit clause reduction" << endl << std::flush;
+            }
+            return (unitPropagate(isDebug));
+        }
+        return (true); //SAT
+    }
+
+    int splitVar = chooseSplitVarAccordingtoHeuristic(isDebug);
+
+    if (split(splitVar, isDebug, recursionDepth + 1)) {
+        return (true); //SAT
+    }
+
+    if (split(splitVar * -1, isDebug, recursionDepth + 1)) {
+        return (true); //SAT
+    }
+
+    return (false); //UNSAT
+ }
+ In the above code flow, lookAheadUnitPropagate() and removeSingularPolarityVars() steps are actually outside of the original
+ steps mentioned in DPLL Algorithm. Additionally, you would be also observing another difference that we don't check explicitly
+ empty clause (a clause which has no literals) for UNSAT -as due to our choice of having unitClause in separate data-structure
+ than normal clauses, empty clause condition is translated as conflict detection in present implementation.
+
+ By default lookAheadUnitPropagate() is switched off as it is helpful mainly for very hard problem to keep depth of search tree shallow,
+ in lieu of performance overhead of doing look ahead unit-clause propagate for each of the unassigned literals.
+ ***************************************************************************************************************************/
+
+/**********************************************************************************************************
+ * Brief description of Heuristics Algo
+ * There are mainly three heuristics algorithms -
+ * MOMS: Maximum Occurrence of variable in Minimum size clauses [Refer:DPLLAlgo::momsHeuristic()]
+ * BI_POLARITY_STAT: Heuristics based on count of both polarities of a particular variables (further choice of SUM, DIFF, PRODUCT and MAX)
+ *                   [Refer : DPLLAlgo::biPolarityHeuristic()]
+ * MAX_UNIT_PROP_TRIGGER: This heuristics internally expects lookAheadUnitPropagate() is enabled. It splits on variable according to
+ *                        which will trigger maximum unit-clause propagation in next stage. [Refer: DPLLAlgo::maxUnitPropTriggerHeuristic()]
+ *********************************************************************************************************/
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
@@ -1255,6 +1315,30 @@ bool determineSATOrUNSAT(FILE* in, bool debug, bool isTimingToBePrinted, Heurist
 
     return (false);
 }
+
+/*************************************************************
+ * COMMAND LINE OPTIONS
+ *
+ * The program runs in three modes -
+ * [1] Compare runtime between different choice of heuristics - in this mode,
+ *     output will be generated in timing.csv and result_out.txt. timing.csv can be easily exported in excel
+ *     for post-processing (plotting graphs etc.). In this mode, all the formula files under a particular
+ *     directory will be read and solved one after another for each of the heuristic algo (presently, MOMS,
+ *     BIPOLAR-SUM, BIPOLAR-DIFF, BIPOLAR-PROD and BIPOLAR-MAX). This mode is enabled using -a and providing
+ *     directory information through -dir. In this mode, each SAT output is also automatically cross validated against
+ *     original formula.
+ *
+ * [2.1] Solving formulas for all the files under a particular directory. It is enabled by providing directory information
+ *       through -dir. Output in this mode is written to stdout.
+ * [2.2] In absence of -dir, input formula is read directly from stdin.
+ * In both 2.1 and 2.2, additionally following options can be enabled -
+ * -d : enables debug log in stdout
+ * -t : calculates timing in microsecond granularity (timing does not include parsing of DIMACS file - it shows only DPLL algo runtime)
+ * -l : enables lookahead unit propagate
+ * -c : cross validates the SAT output by putting it in original formula.
+ * -h : changes heuristic (e.g. MOMS, BI_POLARITY_STAT and MAX_UNIT_PROP_TRIGGER)
+ *      if BI_POLARITY_STAT is enabled it expects additional options of SUM, DIFF, PRODUCT or MAX
+ *************************************************************/
 
 int main(int argc, char *argv[]) {
 
