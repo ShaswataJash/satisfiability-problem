@@ -5,6 +5,23 @@
 // Description : Implementation of DPLL Algorithm with additional enhancement of lookAheadUnitPropagate, removeSingularPolarityVars
 //============================================================================
 
+/******************************************************************************************************************************
+ * Brief Description of Data-structure:
+ * [1] Each clause is represented through unordered_map with key as clauseid (an unique number generated during initial parsing
+ *     Dimacs parser) and value as literals. Further literals are arranged as unordered_set which ensures faster search as well as guaranteed unique literals.
+ *     This is represented through 'clauseDB'.
+ * [2] Further each literal maintains a reverse mapping to the clauseids where they are found. This data-structure is also maintained
+ *     through unordered_map<int, unordered_set<int>> where key is literals and values are clause-ids. This is represented through 'umap'.
+ *     We maintain this reverse mapping because as part of unit-clause propagation and splitting, while assigning a literal to one, we need to
+ *     quickly able to find out where teh partcular literal is situated. It can be better understood by tracking deleteVarFromClause() function
+ *     and its call from unitPropagate() and setVariableToTrue() functions. This also means any removal of clause-id has to update this reverse
+ *     mapping too. Refer deleteClause() function and how umaps are updated from there.
+ * [3] A dedicated list which maintains any unit-clause (represented through 'unitClause'). Further note that, when clauses from clauseDB is converted into unit-clause
+ *     i.e. when it has only single element remaining, it is moved from clauseDB to unitClause. Additionally, 'conflictDetectorForUnitClause'
+ *     is an unordered_set which helps to find out conflict during unit-clause propagation. Refer its usage in unitPropagate.
+ * [4] satResult is a list which holds assignment result of the literals.
+ *
+ *****************************************************************************************************************************/
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
