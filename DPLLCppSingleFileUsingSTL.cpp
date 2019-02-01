@@ -6,6 +6,7 @@
 //============================================================================
 
 #include <iostream>
+#include <fstream>
 #include <stdexcept>
 #include <cstring>
 #include <sstream>
@@ -1064,6 +1065,101 @@ bool validateSATResult(int* finalFormattedResult, int maxVarCount, unordered_map
     return (true);
 }
 
+void runAlgoForComparativeStudy(HeuristicAlgo algo, BiPolarityHeuristic bipolarHeuristic, const char* alogID,
+        ofstream& timingOut, ofstream& resultOut, DimacsParser& dimParser) {
+
+    int maxVarCount = dimParser.getMaxVarCount();
+
+    //As original inputs will mutated within runDPLLAlgo(), will be cloning the original content from dimParser
+    unordered_map<int, Clause> originalClauses = dimParser.getClauses();
+    unordered_map<int, unordered_set<int>> originalVarToClauseMapping = dimParser.getVarToClauseMapping();
+    unordered_set<int> originalUnitClauses = dimParser.getListOfUnitClausesIfAny();
+
+    long long microseconds = -1;
+    auto start = std::chrono::high_resolution_clock::now();
+
+    DPLLAlgo dpLLAlgo(algo, bipolarHeuristic, false, originalClauses, originalVarToClauseMapping, originalUnitClauses);
+    resultOut << alogID << " ";
+    if (dpLLAlgo.runDPLLAlgo(false, 0)) {
+
+        auto elapsed = std::chrono::high_resolution_clock::now() - start;
+        microseconds = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
+        resultOut << "SAT" << " ";
+        int* finalFormattedResult = new int[maxVarCount + 1];
+        memset(finalFormattedResult, 0, (maxVarCount + 1) * sizeof(int));
+        list<int>& result = dpLLAlgo.getSatResult();
+        list<int>::iterator varsInResult;
+        for (varsInResult = result.begin(); varsInResult != result.end(); varsInResult++) {
+            if (*varsInResult > 0) {
+                finalFormattedResult[*varsInResult] = *varsInResult;
+            } else {
+                finalFormattedResult[(*varsInResult) * -1] = *varsInResult;
+            }
+        }
+        for (int i = 1; i <= maxVarCount; i++) {
+            if (finalFormattedResult[i] != 0) {
+                resultOut << finalFormattedResult[i] << " ";
+            } else {
+                finalFormattedResult[i] = i;
+                //cout << '[' << i << "] ";
+                resultOut << i << " ";
+            }
+        }
+        resultOut << "0\n";
+        assert(validateSATResult(finalFormattedResult, maxVarCount, dimParser.getClauses()));
+
+        delete[] finalFormattedResult;
+
+    } else {
+
+        auto elapsed = std::chrono::high_resolution_clock::now() - start;
+        microseconds = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
+        resultOut << "UNSAT\n";
+    }
+
+    timingOut << microseconds << ',';
+}
+
+void comparativeStudyOfHeuristics(FILE* in, ofstream& timingOut, ofstream& resultOut) {
+    try {
+        DimacsParser dimParser;
+        dimParser.parse(in, false);
+        runAlgoForComparativeStudy(MOMS, NONE, "MOMS", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(BI_POLARITY_STAT, SUM, "BIPOLAR-SUM", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(BI_POLARITY_STAT, DIFF, "BIPOLAR-DIFF", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(BI_POLARITY_STAT, PRODUCT, "BIPOLAR-PROD", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(BI_POLARITY_STAT, MAX, "BIPOLAR-MAX", timingOut, resultOut, dimParser);
+        timingOut << "\n";
+        return;
+    } catch (exception& e) {
+        cerr << e.what() << std::flush;
+    } catch (...) {
+        cerr << "\nException occur.";
+    }
+    assert(false);
+}
+
+void initiateAutoCompareAmongstAlgo(list<string>& files) {
+    ofstream resultTime;
+    resultTime.open("timing.csv");
+
+    ofstream resultOut;
+    resultOut.open("result_out.txt");
+
+    list<string>::iterator it;
+    int fileID = 0;
+    for (it = files.begin(); it != files.end(); it++, fileID++) {
+        resultTime << fileID << ',';
+        resultOut << fileID << ' ' << *it << "\n";
+        FILE* file = fopen((*it).c_str(), "r");
+        comparativeStudyOfHeuristics(file, resultTime, resultOut);
+        fclose(file);
+    }
+
+    resultTime.close();
+    resultOut.close();
+}
+
 bool determineSATOrUNSAT(FILE* in, bool debug, bool isTimingToBePrinted, HeuristicAlgo algo,
         BiPolarityHeuristic biPolarHeuSubType, bool isLookAheadResolveEnabled, bool crossValidateToBeDone) {
     try {
@@ -1154,6 +1250,7 @@ int main(int argc, char *argv[]) {
     BiPolarityHeuristic biPolarHeuSubType = NONE;
     bool isLookAheadEnabled = false;
     bool crossValidateToBeDone = false;
+    bool autoCompareMode = false;
 
     if (argc > 1) {
         for (int i = 1; i < argc; i++) {
@@ -1161,6 +1258,8 @@ int main(int argc, char *argv[]) {
                 debug = true;
             } else if (0 == strcmp("-t", argv[i])) {
                 isTimingToBePrinted = true;
+            } else if (0 == strcmp("-a", argv[i])) {
+                autoCompareMode = true;
             } else if (0 == strcmp("-l", argv[i])) {
                 isLookAheadEnabled = true;
             } else if (0 == strcmp("-c", argv[i])) {
@@ -1203,6 +1302,12 @@ int main(int argc, char *argv[]) {
 
         list<string> files;
         dirListing.getFileNames(files);
+
+        if (autoCompareMode) {
+            initiateAutoCompareAmongstAlgo(files);
+            return (0);
+        }
+
         list<string>::iterator it;
         for (it = files.begin(); it != files.end(); it++) {
             cout << *it << endl << std::flush;
