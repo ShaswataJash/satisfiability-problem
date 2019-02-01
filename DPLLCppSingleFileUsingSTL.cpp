@@ -26,51 +26,51 @@
 /****************************************************************************************************************************
  * Brief description of code-flow
  * runDPLLAlgo(bool isDebug, int recursionDepth) {
-
-    if (!unitPropagate(isDebug)) {
-        return (false); //conflict detected
-    }
-
-    if (clauseDB.empty() && unitClause.empty()) {
-        return (true); //SAT
-    }
-
-    bool lookAheadUnitProp = (!isLookAheadUnitPropStepEnabled) ? true : lookAheadUnitPropagate(isDebug);
-    if (!lookAheadUnitProp) {
-        return (false); //conflict detected
-    }
-
-    removeSingularPolarityVars(isDebug);
-
-    if (clauseDB.empty()) {
-        if (!unitClause.empty()) {
-            if (isDebug) {
-                cout << "Re-triggering unit clause reduction" << endl << std::flush;
-            }
-            return (unitPropagate(isDebug));
-        }
-        return (true); //SAT
-    }
-
-    int splitVar = chooseSplitVarAccordingtoHeuristic(isDebug);
-
-    if (split(splitVar, isDebug, recursionDepth + 1)) {
-        return (true); //SAT
-    }
-
-    if (split(splitVar * -1, isDebug, recursionDepth + 1)) {
-        return (true); //SAT
-    }
-
-    return (false); //UNSAT
- }
- In the above code flow, lookAheadUnitPropagate() and removeSingularPolarityVars() steps are actually outside of the original
- steps mentioned in DPLL Algorithm. Additionally, you would be also observing another difference that we don't check explicitly
- empty clause (a clause which has no literals) for UNSAT -as due to our choice of having unitClause in separate data-structure
- than normal clauses, empty clause condition is translated as conflict detection in present implementation.
-
- By default lookAheadUnitPropagate() is switched off as it is helpful mainly for very hard problem to keep depth of search tree shallow,
- in lieu of performance overhead of doing look ahead unit-clause propagate for each of the unassigned literals.
+ *
+ *   if (!unitPropagate(isDebug)) {
+ *       return (false); //conflict detected
+ *   }
+ *
+ *   if (clauseDB.empty() && unitClause.empty()) {
+ *       return (true); //SAT
+ *   }
+ *
+ *   bool lookAheadUnitProp = (!isLookAheadUnitPropStepEnabled) ? true : lookAheadUnitPropagate(isDebug);
+ *   if (!lookAheadUnitProp) {
+ *       return (false); //conflict detected
+ *   }
+ *
+ *   removeSingularPolarityVars(isDebug);
+ *
+ *   if (clauseDB.empty()) {
+ *       if (!unitClause.empty()) {
+ *           if (isDebug) {
+ *               cout << "Re-triggering unit clause reduction" << endl << std::flush;
+ *           }
+ *           return (unitPropagate(isDebug));
+ *       }
+ *       return (true); //SAT
+ *   }
+ *
+ *   int splitVar = chooseSplitVarAccordingtoHeuristic(isDebug);
+ *
+ *   if (split(splitVar, isDebug, recursionDepth + 1)) {
+ *       return (true); //SAT
+ *   }
+ *
+ *   if (split(splitVar * -1, isDebug, recursionDepth + 1)) {
+ *       return (true); //SAT
+ *   }
+ *
+ *   return (false); //UNSAT
+ *}
+ * In the above code flow, lookAheadUnitPropagate() and removeSingularPolarityVars() steps are actually outside of the original
+ * steps mentioned in DPLL Algorithm. Additionally, you would be also observing another difference that we don't check explicitly
+ * empty clause (a clause which has no literals) for UNSAT -as due to our choice of having unitClause in separate data-structure
+ * than normal clauses, empty clause condition is translated as conflict detection in present implementation.
+ *
+ * By default lookAheadUnitPropagate() is switched off as it is helpful mainly for very hard problem to keep depth of search tree shallow,
+ * in lieu of performance overhead of doing look ahead unit-clause propagate for each of the unassigned literals.
  ***************************************************************************************************************************/
 
 /**********************************************************************************************************
