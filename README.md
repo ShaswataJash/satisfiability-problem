@@ -1,7 +1,7 @@
 # satisfiability-problem
 Boolean satisfiability problem (SAT), maximum satisfiability problem (MAX-SAT) etc
 
-This project is meant for academic purpose. Thus, please do not expect the code to be performant as other SAT solvers developed to win competitions. Main intention for this project is to showcase readable code for understanding some of the important algorithms used in SAT solving domain. Readers can observe that each source file has dedicated comments section to explain the choice of data-structure, code-flow etc. Intentionally, each of teh source file is kept self sufficient i.e. in each of the file itself you will find code for algorithm, DIMACS format file parsing and main() function.
+This project is meant for academic purpose. Thus, please do not expect the code to be performant as other SAT solvers developed to win competitions. Main intention for this project is to showcase readable code for understanding some of the important algorithms used in SAT solving domain. Readers can observe that each source file has dedicated comments section to explain the choice of data-structure, code-flow etc. Intentionally, each of the source file is kept self sufficient i.e. in each of the file itself you will find code for algorithm, DIMACS format file parsing and main() function.
 
 ```To compile any of the source file:  g++ -o <executable name> -O2 --std=c++11 <source-file-name>.cpp ```
 
