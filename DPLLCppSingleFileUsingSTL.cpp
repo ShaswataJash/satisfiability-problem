@@ -82,6 +82,12 @@
  *                   [Refer : DPLLAlgo::biPolarityHeuristic()]
  * MAX_UNIT_PROP_TRIGGER: This heuristics internally expects lookAheadUnitPropagate() is enabled. It splits on variable according to
  *                        which will trigger maximum unit-clause propagation in next stage. [Refer: DPLLAlgo::maxUnitPropTriggerHeuristic()]
+ *
+ * There is also choice for direction heuristic - this is presently controlled through isDirectionChoicePrioritizedAccordingToUnitClauseProp flag
+ * When isDirectionChoicePrioritizedAccordingToUnitClauseProp is true, intention is to trigger as much as possible reduction of clauses through unit-propagation (not removal of clause)
+ *
+ * By default MOMS algorithm is set and isDirectionChoicePrioritizedAccordingToUnitClauseProp set to false.
+ * Choice of default values are based upon empirical study (result is present in same Github).
  *********************************************************************************************************/
 #include <iostream>
 #include <fstream>
@@ -191,6 +197,9 @@ private:
 
     bool isLookAheadUnitPropStepEnabled;
 
+    //When isDirectionChoicePrioritizedAccordingToUnitClauseProp is true, intention is to trigger as much as possible reduction of clauses (not removal of clause)
+    bool isDirectionChoicePrioritizedAccordingToUnitClauseProp;
+
     int momsHeuristic(bool isDebug) const;
     int biPolarityHeuristic(bool isDebug) const;
     int maxUnitPropTriggerHeuristic(bool isDebug);
@@ -289,10 +298,13 @@ public:
     }
 
     DPLLAlgo(HeuristicAlgo my_algo, BiPolarityHeuristic subType, bool lookAheadEnabled,
-            unordered_map<int, Clause>& my_clauseDB, unordered_map<int, unordered_set<int>>& my_umap,
-            unordered_set<int>& my_unitClause) :
-            algo(my_algo), typeOfBiPolarHeuristic(subType), clauseDB(my_clauseDB), umap(my_umap), unitClause(
-                    my_unitClause), unitClauseReductionCount(0), isLookAheadUnitPropStepEnabled(lookAheadEnabled) {
+            bool directionPriorityTowardsMoreUnitClauseRed, unordered_map<int, Clause>& my_clauseDB,
+            unordered_map<int, unordered_set<int>>& my_umap, unordered_set<int>& my_unitClause) :
+            algo(my_algo), typeOfBiPolarHeuristic(subType),
+                    clauseDB(my_clauseDB), umap(my_umap), unitClause(my_unitClause),
+                    unitClauseReductionCount(0),
+                    isLookAheadUnitPropStepEnabled(lookAheadEnabled),
+                    isDirectionChoicePrioritizedAccordingToUnitClauseProp(directionPriorityTowardsMoreUnitClauseRed) {
         if (MAX_UNIT_PROP_TRIGGER == my_algo) {
             isLookAheadUnitPropStepEnabled = true;
         }
@@ -404,8 +416,8 @@ bool DPLLAlgo::split(int var, bool isDebug, int recursionDepth) {
 
     setVariableToTrue(var, isDebug, my_clauseDB, my_umap, my_unitClause);
 
-    DPLLAlgo algoForNextRecursion(algo, typeOfBiPolarHeuristic, isLookAheadUnitPropStepEnabled, my_clauseDB, my_umap,
-            my_unitClause);
+    DPLLAlgo algoForNextRecursion(algo, typeOfBiPolarHeuristic, isLookAheadUnitPropStepEnabled,
+            isDirectionChoicePrioritizedAccordingToUnitClauseProp, my_clauseDB, my_umap, my_unitClause);
     if (true == algoForNextRecursion.runDPLLAlgo(isDebug, recursionDepth)) {
         satResult.push_back(var);
         list<int>& res = algoForNextRecursion.getSatResult();
@@ -492,7 +504,9 @@ int DPLLAlgo::momsHeuristic(bool isDebug) const {
                 //ensure we get only bi-polar variables here
                 if ((umap.find(*itr7) != umap.end()) && (umap.find((*itr7) * -1) != umap.end())) {
                     //TODO: tie break
-                    return ((*itr7) * -1); //intention is to trigger as much as possible reduction of clauses (not removal of clause)
+
+                    //When isDirectionChoicePrioritizedAccordingToUnitClauseProp is set, intention is to trigger as much as possible reduction of clauses (not removal of clause)
+                    return (isDirectionChoicePrioritizedAccordingToUnitClauseProp ? ((*itr7) * -1) : *itr7);
                 }
             }
 
@@ -554,15 +568,21 @@ int DPLLAlgo::biPolarityHeuristic(bool isDebug) const {
         cout << endl << std::flush;
     }
 
-    int candidateVar =
-            (varsWithMaxOccur.front().positiveCount > varsWithMaxOccur.front().negativeCount) ?
-                    (varsWithMaxOccur.front().var * -1) : varsWithMaxOccur.front().var; //intention is to trigger as much as possible reduction of clauses (not removal of clause)
-    if (varsWithMaxOccur.size() > 0) {
-        //TODO tie break;
-
+    if (isDirectionChoicePrioritizedAccordingToUnitClauseProp) {
+        int candidateVar =
+                (varsWithMaxOccur.front().positiveCount > varsWithMaxOccur.front().negativeCount) ?
+                        (varsWithMaxOccur.front().var * -1) : varsWithMaxOccur.front().var; //intention is to trigger as much as possible reduction of clauses (not removal of clause)
+        return (candidateVar);
+    } else {
+        int candidateVar =
+                (varsWithMaxOccur.front().positiveCount > varsWithMaxOccur.front().negativeCount) ?
+                        varsWithMaxOccur.front().var : (varsWithMaxOccur.front().var * -1); //intention is to trigger as much as removal of clauses (not reduction of clauses)
+        return (candidateVar);
     }
 
-    return (candidateVar);
+    //TODO tie break;
+    /*if (varsWithMaxOccur.size() > 0) {
+     }*/
 }
 
 int DPLLAlgo::maxUnitPropTriggerHeuristic(bool isDebug) {
@@ -633,7 +653,7 @@ bool DPLLAlgo::lookAheadUnitPropagate(bool isDebug) {
 
         setVariableToTrue(var, isDebug, my_clauseDBVar, my_umapVar, my_unitClauseVar);
 
-        DPLLAlgo algoForNextRecursion_var(algo, NONE, false, my_clauseDBVar, my_umapVar, my_unitClauseVar);
+        DPLLAlgo algoForNextRecursion_var(algo, NONE, false, true, my_clauseDBVar, my_umapVar, my_unitClauseVar);
         bool unitPropResVar = (my_unitClauseVar.size() <= 0) ? true : algoForNextRecursion_var.unitPropagate(false);
 
         unordered_map<int, unordered_set<int>> my_umapVarNot = umap;
@@ -642,7 +662,8 @@ bool DPLLAlgo::lookAheadUnitPropagate(bool isDebug) {
 
         setVariableToTrue(var * -1, isDebug, my_clauseDBVarNot, my_umapVarNot, my_unitClauseVarNot);
 
-        DPLLAlgo algoForNextRecursion_varNot(algo, NONE, false, my_clauseDBVarNot, my_umapVarNot, my_unitClauseVarNot);
+        DPLLAlgo algoForNextRecursion_varNot(algo, NONE, false, true, my_clauseDBVarNot, my_umapVarNot,
+                my_unitClauseVarNot);
         bool unitPropResVarNot =
                 (my_unitClauseVarNot.size() <= 0) ? true : algoForNextRecursion_varNot.unitPropagate(false);
 
@@ -1082,7 +1103,7 @@ void DimacsParser::parse(FILE* in, bool isDebug) {
 class DirectoryListing {
 private:
     list<string> listOfFileName;
-public:
+    public:
     bool openDir(char* dirPath) {
         DIR *dir;
         struct dirent *ent;
@@ -1144,8 +1165,9 @@ bool validateSATResult(int* finalFormattedResult, int maxVarCount, unordered_map
     return (true);
 }
 
-void runAlgoForComparativeStudy(HeuristicAlgo algo, BiPolarityHeuristic bipolarHeuristic, const char* alogID,
-        ofstream& timingOut, ofstream& resultOut, DimacsParser& dimParser) {
+void runAlgoForComparativeStudy(HeuristicAlgo algo, BiPolarityHeuristic bipolarHeuristic,
+        bool isDirectionChoicePrioritiedAccordingToUnitClauseProp, const char* alogID, ofstream& timingOut,
+        ofstream& resultOut, DimacsParser& dimParser) {
 
     int maxVarCount = dimParser.getMaxVarCount();
 
@@ -1157,7 +1179,8 @@ void runAlgoForComparativeStudy(HeuristicAlgo algo, BiPolarityHeuristic bipolarH
     long long microseconds = -1;
     auto start = std::chrono::high_resolution_clock::now();
 
-    DPLLAlgo dpLLAlgo(algo, bipolarHeuristic, false, originalClauses, originalVarToClauseMapping, originalUnitClauses);
+    DPLLAlgo dpLLAlgo(algo, bipolarHeuristic, false, isDirectionChoicePrioritiedAccordingToUnitClauseProp,
+            originalClauses, originalVarToClauseMapping, originalUnitClauses);
     resultOut << alogID << " ";
     if (dpLLAlgo.runDPLLAlgo(false, 0)) {
 
@@ -1203,11 +1226,16 @@ void comparativeStudyOfHeuristics(FILE* in, ofstream& timingOut, ofstream& resul
     try {
         DimacsParser dimParser;
         dimParser.parse(in, false);
-        runAlgoForComparativeStudy(MOMS, NONE, "MOMS", timingOut, resultOut, dimParser);
-        runAlgoForComparativeStudy(BI_POLARITY_STAT, SUM, "BIPOLAR-SUM", timingOut, resultOut, dimParser);
-        runAlgoForComparativeStudy(BI_POLARITY_STAT, DIFF, "BIPOLAR-DIFF", timingOut, resultOut, dimParser);
-        runAlgoForComparativeStudy(BI_POLARITY_STAT, PRODUCT, "BIPOLAR-PROD", timingOut, resultOut, dimParser);
-        runAlgoForComparativeStudy(BI_POLARITY_STAT, MAX, "BIPOLAR-MAX", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(MOMS, NONE, true, "MOMS-U", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(MOMS, NONE, false, "MOMS-R", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(BI_POLARITY_STAT, SUM, true, "BIPOLAR-SUM-U", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(BI_POLARITY_STAT, SUM, false, "BIPOLAR-SUM-R", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(BI_POLARITY_STAT, DIFF, true, "BIPOLAR-DIFF-U", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(BI_POLARITY_STAT, DIFF, false, "BIPOLAR-DIFF-R", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(BI_POLARITY_STAT, PRODUCT, true, "BIPOLAR-PROD-U", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(BI_POLARITY_STAT, PRODUCT, false, "BIPOLAR-PROD-R", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(BI_POLARITY_STAT, MAX, true, "BIPOLAR-MAX-U", timingOut, resultOut, dimParser);
+        runAlgoForComparativeStudy(BI_POLARITY_STAT, MAX, false, "BIPOLAR-MAX-R", timingOut, resultOut, dimParser);
         timingOut << "\n";
         return;
     } catch (exception& e) {
@@ -1240,7 +1268,8 @@ void initiateAutoCompareAmongstAlgo(list<string>& files) {
 }
 
 bool determineSATOrUNSAT(FILE* in, bool debug, bool isTimingToBePrinted, HeuristicAlgo algo,
-        BiPolarityHeuristic biPolarHeuSubType, bool isLookAheadResolveEnabled, bool crossValidateToBeDone) {
+        BiPolarityHeuristic biPolarHeuSubType, bool isLookAheadResolveEnabled, bool isDirectionPriorityInUnitClauseProp,
+        bool crossValidateToBeDone) {
     try {
 
         DimacsParser dimParser;
@@ -1263,8 +1292,8 @@ bool determineSATOrUNSAT(FILE* in, bool debug, bool isTimingToBePrinted, Heurist
         long long microseconds = -1;
         auto start = std::chrono::high_resolution_clock::now();
 
-        DPLLAlgo dpLLAlgo(algo, biPolarHeuSubType, isLookAheadResolveEnabled, originalClauses,
-                originalVarToClauseMapping, originalUnitClauses);
+        DPLLAlgo dpLLAlgo(algo, biPolarHeuSubType, isLookAheadResolveEnabled, isDirectionPriorityInUnitClauseProp,
+                originalClauses, originalVarToClauseMapping, originalUnitClauses);
 
         if (dpLLAlgo.runDPLLAlgo(debug, 0)) {
 
@@ -1340,6 +1369,9 @@ bool determineSATOrUNSAT(FILE* in, bool debug, bool isTimingToBePrinted, Heurist
  * -c : cross validates the SAT output by putting it in original formula.
  * -h : changes heuristic (e.g. MOMS, BI_POLARITY_STAT and MAX_UNIT_PROP_TRIGGER)
  *      if BI_POLARITY_STAT is enabled it expects additional options of SUM, DIFF, PRODUCT or MAX
+ * -p : set direction heuristic such a way isDirectionChoicePrioritizedAccordingToUnitClauseProp set to true.
+ *
+ * CAUTION: There is no validation check while command line argument parsing - you may face segmentation fault if you miss required arguments.
  *************************************************************/
 
 int main(int argc, char *argv[]) {
@@ -1354,6 +1386,7 @@ int main(int argc, char *argv[]) {
     bool isLookAheadEnabled = false;
     bool crossValidateToBeDone = false;
     bool autoCompareMode = false;
+    bool isDirectionPriorityInUnitClauseProp = false;
 
     if (argc > 1) {
         for (int i = 1; i < argc; i++) {
@@ -1365,6 +1398,8 @@ int main(int argc, char *argv[]) {
                 autoCompareMode = true;
             } else if (0 == strcmp("-l", argv[i])) {
                 isLookAheadEnabled = true;
+            } else if (0 == strcmp("-p", argv[i])) {
+                isDirectionPriorityInUnitClauseProp = true;
             } else if (0 == strcmp("-c", argv[i])) {
                 crossValidateToBeDone = true;
             } else if (0 == strcmp("-dir", argv[i])) {
@@ -1416,13 +1451,13 @@ int main(int argc, char *argv[]) {
             cout << *it << endl << std::flush;
             FILE* file = fopen((*it).c_str(), "r");
             determineSATOrUNSAT(file, debug, isTimingToBePrinted, algo, biPolarHeuSubType, isLookAheadEnabled,
-                    crossValidateToBeDone);
+                    isDirectionPriorityInUnitClauseProp, crossValidateToBeDone);
             fclose(file);
         }
 
     } else {
         if (!determineSATOrUNSAT(stdin, debug, isTimingToBePrinted, algo, biPolarHeuSubType, isLookAheadEnabled,
-                crossValidateToBeDone)) {
+                isDirectionPriorityInUnitClauseProp, crossValidateToBeDone)) {
             cerr << "determineSATOrUNSAT failed from stdin";
             return (1);
         }
