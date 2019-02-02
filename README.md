@@ -8,6 +8,7 @@ This project is meant for academic purpose. Thus, please do not expect the code 
 - **DPLLCppSingleFileUsingSTL.cpp** : Implementation of [DPLL](https://en.wikipedia.org/wiki/DPLL_algorithm) Algorithm with additional enhancement of look-Ahead-Unit-Propagate option and removal of singular polarity variable as an intermediate step. Input formula is accepted in CNF (Conjunctive Normal form) and is represented through DIMACS format.
 
 ### Benchmark experiments
+Experiments are done in single core of Intel(R) Core(TM) i-4700MQ CPU @2.4 GHz, 8GB RAM, 64 bit Windows7 (CygWin64) 
 
 - **DPLLCppSingleFileUsingSTL.cpp** : Benchmarks are picked up from [here](https://www.cs.ubc.ca/~hoos/SATLIB/benchm.html). For this experiment, uniform random 3-SAT *uf175-753 / uuf175-753: 175 variables, 753 clauses - 100 instances, all sat/unsat* is used. The benchmarks were run against MOMS,BIPOLAR-SUM,BIPOLAR-DIFF,BIPOLAR-PRODUCT,BIPOLAR-MAX heuristics choice (along with separately directional heuristics for either prioritizing unit-clause reduction or removal of clauses, indicated respectively as U and R suffixed algorithm name). Result of experiment indicated MOMS-R as best choice. Default heuristic value in DPLLCppSingleFileUsingSTL.cpp is set accordingly. Following tables are showing glimpse of the experiment for SAT and UNSAT benchmarks respectively.
 
