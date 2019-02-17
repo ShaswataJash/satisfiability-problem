@@ -587,24 +587,24 @@ int CDCLAlgo::biPolarityHeuristic(bool isDebug) const {
     for (itr1 = umap.begin(); itr1 != umap.end(); itr1++) {
         if (((itr1->first > 0) && (itr1->second).size() > 0)) {
 
-            if (umap.find((itr1->first) * (-1)) != umap.end()) {
+            if (umap.find(-(itr1->first)) != umap.end()) {
                 polarityStat ps;
                 ps.positiveCount = (itr1->second).size();
-                ps.negativeCount = umap[(itr1->first) * (-1)].size();
+                ps.negativeCount = umap[-(itr1->first)].size();
                 ps.var = itr1->first;
                 unsigned int reverse_polarity_occur = 0;
                 switch (typeOfBiPolarHeuristic) {
                 case SUM:
-                    reverse_polarity_occur = umap[(itr1->first) * (-1)].size() + (itr1->second).size();
+                    reverse_polarity_occur = umap[-(itr1->first)].size() + (itr1->second).size();
                     break;
                 case DIFF:
-                    reverse_polarity_occur = abs((int) (umap[(itr1->first) * (-1)].size() - (itr1->second).size()));
+                    reverse_polarity_occur = abs((int) (umap[-(itr1->first)].size() - (itr1->second).size()));
                     break;
                 case PRODUCT:
-                    reverse_polarity_occur = umap[(itr1->first) * (-1)].size() * (itr1->second).size();
+                    reverse_polarity_occur = umap[-(itr1->first)].size() * (itr1->second).size();
                     break;
                 case MAX:
-                    reverse_polarity_occur = max(umap[(itr1->first) * (-1)].size(), (itr1->second).size());
+                    reverse_polarity_occur = max(umap[-(itr1->first)].size(), (itr1->second).size());
                     break;
                 default:
                     assert(false);
