@@ -454,7 +454,7 @@ void CDCLAlgo::setVariableToTrue(int var, bool isDebug, int level) {
         }
     }
 
-    int complementUnitVar = var * -1;
+    int complementUnitVar = -var;
     if (umap.find(complementUnitVar) != umap.end()) {
 
         unordered_set<int> listOfAffectedClauses = umap[complementUnitVar];
@@ -485,7 +485,7 @@ int CDCLAlgo::momsHeuristic(bool isDebug) {
 
                 for(it = vars.begin(); it != vars.end(); it ++){
                     assert(umap.find(*it) != umap.end());
-                    assert(umap.find(*it * -1) != umap.end());
+                    assert(umap.find(-(*it)) != umap.end());
                     return (*it); //TODO: check for all remaining var assignment
                 }
             }
@@ -560,11 +560,11 @@ int CDCLAlgo::momsHeuristic(bool isDebug) {
                 //Following condition will ensure we pickup such variable which has both polarity.
                 //Although this condition should not arise as call of removeSingularPolarityVars() will
                 //ensure we get only bi-polar variables here
-                if ((umap.find(*itr7) != umap.end()) && (umap.find((*itr7) * -1) != umap.end())) {
+                if ((umap.find(*itr7) != umap.end()) && (umap.find(-(*itr7)) != umap.end())) {
                     //TODO: tie break
 
                     //When isDirectionChoicePrioritizedAccordingToUnitClauseProp is set, intention is to trigger as much as possible reduction of clauses (not removal of clause)
-                    return (isDirectionChoicePrioritizedAccordingToUnitClauseProp ? ((*itr7) * -1) : *itr7);
+                    return (isDirectionChoicePrioritizedAccordingToUnitClauseProp ? -(*itr7) : *itr7);
                 }
             }
 
@@ -629,12 +629,12 @@ int CDCLAlgo::biPolarityHeuristic(bool isDebug) const {
     if (isDirectionChoicePrioritizedAccordingToUnitClauseProp) {
         int candidateVar =
                 (varsWithMaxOccur.front().positiveCount > varsWithMaxOccur.front().negativeCount) ?
-                        (varsWithMaxOccur.front().var * -1) : varsWithMaxOccur.front().var; //intention is to trigger as much as possible reduction of clauses (not removal of clause)
+                        -(varsWithMaxOccur.front().var) : varsWithMaxOccur.front().var; //intention is to trigger as much as possible reduction of clauses (not removal of clause)
         return (candidateVar);
     } else {
         int candidateVar =
                 (varsWithMaxOccur.front().positiveCount > varsWithMaxOccur.front().negativeCount) ?
-                        varsWithMaxOccur.front().var : (varsWithMaxOccur.front().var * -1); //intention is to trigger as much as removal of clauses (not reduction of clauses)
+                        varsWithMaxOccur.front().var : -(varsWithMaxOccur.front().var); //intention is to trigger as much as removal of clauses (not reduction of clauses)
         return (candidateVar);
     }
 
@@ -656,7 +656,7 @@ bool CDCLAlgo::removeSingularPolarityVars(bool isDebug) {
         //to capture the affected clauses for singular polarity variable
         bool isAtleastOneSinglePolarityVarFound = false;
         for (itr = umap.begin(); itr != umap.end(); itr++) {
-            if (umap.find(itr->first * -1) == umap.end()) { //single polarity variable
+            if (umap.find(-(itr->first)) == umap.end()) { //single polarity variable
 
                 if (isDebug) {
                     cout << "<Loop=" << loopCount << '>' << "Single polarity var = " << itr->first << endl
@@ -708,7 +708,7 @@ void CDCLAlgo::learnConflictReason(int conflictedVar, int originatingClauseID1, 
 
     if (isDebug) {
         unordered_map<int, VarAssignInfo>::iterator it;
-        cout << "participatingVars1: [ClauseID=" << originatingClauseID1 << " coming from conflict literal " << (conflictedVar * -1) << "]";
+        cout << "participatingVars1: [ClauseID=" << originatingClauseID1 << " coming from conflict literal " << (-conflictedVar) << "]";
         unordered_map<int, VarAssignInfo>& ancedentInfo1 = literalAncedentHistory[originatingClauseID1];
         for (it = ancedentInfo1.begin(); it != ancedentInfo1.end(); it++) {
             cout << it->first << "(L=" << (it->second).level << ", AC=" << (it->second).antecendentClause << ") ";
@@ -730,7 +730,7 @@ void CDCLAlgo::learnConflictReason(int conflictedVar, int originatingClauseID1, 
         unordered_map<int, VarAssignInfo>::iterator it;
         unordered_map<int, VarAssignInfo>& ancedentInfo1 = literalAncedentHistory[originatingClauseID1];
         for (it = ancedentInfo1.begin(); it != ancedentInfo1.end(); it++) {
-            if(((it->first) != conflictedVar) && ((it->first) != (conflictedVar * -1))){
+            if(((it->first) != conflictedVar) && ((it->first) != -conflictedVar)){
                 int my_level = (it->second).level;
                 if(my_level < nonChronoBacktrackLevel){
                     nonChronoBacktrackLevel = my_level;
@@ -742,7 +742,7 @@ void CDCLAlgo::learnConflictReason(int conflictedVar, int originatingClauseID1, 
 
         unordered_map<int, VarAssignInfo>& ancedentInfo2 = literalAncedentHistory[originatingClauseID2];
         for (it = ancedentInfo2.begin(); it != ancedentInfo2.end(); it++) {
-            if(((it->first) != conflictedVar) && ((it->first) != (conflictedVar * -1))){
+            if(((it->first) != conflictedVar) && ((it->first) != -conflictedVar)){
                 int my_level = (it->second).level;
                 if(my_level < nonChronoBacktrackLevel){
                     nonChronoBacktrackLevel = my_level;
@@ -759,7 +759,7 @@ void CDCLAlgo::learnConflictReason(int conflictedVar, int originatingClauseID1, 
         unordered_map<int, VarAssignInfo>::iterator it;
         unordered_map<int, VarAssignInfo>& ancedentInfo1 = literalAncedentHistory[originatingClauseID1];
         for (it = ancedentInfo1.begin(); it != ancedentInfo1.end(); it++) {
-            if(((it->first) != conflictedVar) && ((it->first) != (conflictedVar * -1))){
+            if(((it->first) != conflictedVar) && ((it->first) != -conflictedVar)){
                 int my_level = (it->second).level;
                 if(my_level > nonChronoBacktrackLevel){
                     nonChronoBacktrackLevel = my_level;
@@ -771,7 +771,7 @@ void CDCLAlgo::learnConflictReason(int conflictedVar, int originatingClauseID1, 
 
         unordered_map<int, VarAssignInfo>& ancedentInfo2 = literalAncedentHistory[originatingClauseID2];
         for (it = ancedentInfo2.begin(); it != ancedentInfo2.end(); it++) {
-            if(((it->first) != conflictedVar) && ((it->first) != (conflictedVar * -1))){
+            if(((it->first) != conflictedVar) && ((it->first) != -conflictedVar)){
                 int my_level = (it->second).level;
                 if(my_level > nonChronoBacktrackLevel){
                     nonChronoBacktrackLevel = my_level;
@@ -817,13 +817,13 @@ bool CDCLAlgo::unitPropagate(bool isDebug, int level) {
             conflictDetectorForUnitClause[entryUnitClauseIt->first] = entryUnitClauseIt->second; //usage of set for unitClause will gurantee non-duplicated entry,
             //additionally conflictDetectorForUnitClause itself is set
 
-            if (conflictDetectorForUnitClause.find((entryUnitClauseIt->first) * -1)
+            if (conflictDetectorForUnitClause.find(-(entryUnitClauseIt->first))
                     != conflictDetectorForUnitClause.end()) {
                 if (isDebug) {
                     cout << "conflict detected through unit clause for " << (entryUnitClauseIt->first) << endl << std::flush;
                 }
                 learnConflictReason(entryUnitClauseIt->first,
-                        conflictDetectorForUnitClause[(entryUnitClauseIt->first) * -1],
+                        conflictDetectorForUnitClause[-(entryUnitClauseIt->first)],
                         entryUnitClauseIt->second, isDebug);
                 return (false); //conflict
             }
@@ -842,7 +842,7 @@ bool CDCLAlgo::unitPropagate(bool isDebug, int level) {
         int originatingClauseID = (unitClause.begin())->second;
         unitClause.erase(unitVar);
 
-        int complementUnitVar = unitVar * -1;
+        int complementUnitVar = -unitVar;
         satResult.push_back(unitVar);
 
         //The first check with respect to umap.find is very important , without that unnecessary blank element with complementUnitVar will be inserted in umap
@@ -879,12 +879,12 @@ bool CDCLAlgo::unitPropagate(bool isDebug, int level) {
                     //But in our implementation, as soon as the clause is remaining with last element, i.e. 3, it is moved to
                     //unitClause list. Thus, empty clause condition can be checked indirectly by checking presence of unit-compliment
 
-                    if (conflictDetectorForUnitClause.find(remainingVar * -1) != conflictDetectorForUnitClause.end()) {
+                    if (conflictDetectorForUnitClause.find(-remainingVar) != conflictDetectorForUnitClause.end()) {
                         if (isDebug) {
                             cout << "conflict detected through unit clause for " << remainingVar << endl << std::flush;
                         }
                         learnConflictReason(remainingVar,
-                                conflictDetectorForUnitClause[remainingVar * -1],
+                                conflictDetectorForUnitClause[-remainingVar],
                                 affectedClause.getUniqueID(), isDebug);
                         return (false);
                     }
@@ -1077,7 +1077,7 @@ restart:
         }
     }
 
-    if (split(splitVar * -1, isDebug, recursionDepth + 1)) {
+    if (split(-splitVar, isDebug, recursionDepth + 1)) {
         return (true);
     } else{
         if(clauseLearning){
@@ -1327,7 +1327,7 @@ bool validateSATResult(int* finalFormattedResult, int maxVarCount, unordered_map
                     break;
                 }
             } else {
-                if (finalFormattedResult[var * -1] == var) {
+                if (finalFormattedResult[-var] == var) {
                     atleastOneVarTrue = true;
                     break;
                 }
@@ -1381,7 +1381,7 @@ void runAlgoForComparativeStudy(HeuristicAlgo algo, BiPolarityHeuristic bipolarH
             if (*varsInResult > 0) {
                 finalFormattedResult[*varsInResult] = *varsInResult;
             } else {
-                finalFormattedResult[(*varsInResult) * -1] = *varsInResult;
+                finalFormattedResult[-(*varsInResult)] = *varsInResult;
             }
         }
         for (int i = 1; i <= maxVarCount; i++) {
@@ -1500,7 +1500,7 @@ bool determineSATOrUNSAT(FILE* in, bool debug, bool isTimingToBePrinted, Heurist
                 if (*varsInResult > 0) {
                     finalFormattedResult[*varsInResult] = *varsInResult;
                 } else {
-                    finalFormattedResult[(*varsInResult) * -1] = *varsInResult;
+                    finalFormattedResult[-(*varsInResult)] = *varsInResult;
                 }
             }
             for (int i = 1; i <= maxVarCount; i++) {
